@@ -1,4 +1,5 @@
 const STORAGE_KEY = "inventory-scanner-items-v1";
+const SCAN_COOLDOWN_MS = 1000;
 
 const state = {
   items: loadItems(),
@@ -7,6 +8,7 @@ const state = {
   audioContext: null,
   lastScan: "",
   lastScanAt: 0,
+  lastAcceptedScanAt: 0,
   query: "",
 };
 
@@ -195,12 +197,13 @@ function onScanSuccess(decodedText) {
   const now = Date.now();
   if (!barcode) return;
 
-  if (state.lastScan === barcode && now - state.lastScanAt < 1400) {
+  if (now - state.lastAcceptedScanAt < SCAN_COOLDOWN_MS) {
     return;
   }
 
   state.lastScan = barcode;
   state.lastScanAt = now;
+  state.lastAcceptedScanAt = now;
   addScan(barcode);
   confirmScan(barcode);
 }
@@ -329,6 +332,6 @@ function loadScript(src) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=3").catch(() => {});
+    navigator.serviceWorker.register("./service-worker.js?v=4").catch(() => {});
   });
 }
