@@ -1,5 +1,6 @@
 const STORAGE_KEY = "inventory-scanner-items-v1";
 const SCAN_COOLDOWN_MS = 1000;
+const PRODUCT_LOOKUP_URL = "https://upc.dev/v1/product/";
 
 const state = {
   items: loadItems(),
@@ -52,6 +53,7 @@ els.manualForm.addEventListener("submit", (event) => {
 
   addScan(barcode);
   confirmScan(barcode);
+  lookupProductIfNeeded(barcode);
   els.barcodeInput.value = "";
   els.barcodeInput.focus();
 });
@@ -87,6 +89,8 @@ function addScan(value) {
       name: "",
       count: 1,
       updatedAt: new Date().toISOString(),
+      lookupAttemptedAt: "",
+      lookupStatus: "",
     });
   }
 
@@ -123,6 +127,10 @@ function render() {
     nameInput.addEventListener("change", () => {
       item.name = nameInput.value.trim();
       item.updatedAt = new Date().toISOString();
+      if (item.name) {
+        item.lookupStatus = "manual";
+        item.lookupAttemptedAt = item.lookupAttemptedAt || new Date().toISOString();
+      }
       saveItems();
       render();
     });
@@ -206,10 +214,60 @@ function onScanSuccess(decodedText) {
   state.lastAcceptedScanAt = now;
   addScan(barcode);
   confirmScan(barcode);
+  lookupProductIfNeeded(barcode);
 }
 
 function setStatus(message) {
   els.scannerStatus.textContent = message;
+}
+
+async function lookupProductIfNeeded(barcode) {
+  const item = state.items.find((entry) => entry.barcode === barcode);
+  if (!item || item.name || item.lookupAttemptedAt) return;
+
+  item.lookupAttemptedAt = new Date().toISOString();
+  item.lookupStatus = "looking";
+  saveItems();
+  setStatus(`Looking up ${barcode}...`);
+
+  try {
+    const response = await fetch(`${PRODUCT_LOOKUP_URL}${encodeURIComponent(barcode)}`, {
+      headers: { Accept: "application/json" },
+    });
+
+    if (!response.ok) {
+      item.lookupStatus = response.status === 404 ? "not-found" : "failed";
+      saveItems();
+      setStatus(response.status === 404 ? `No product name found for ${barcode}.` : "Product lookup failed.");
+      return;
+    }
+
+    const result = await response.json();
+    const product = result.data || result.product || {};
+    const productName = [product.brand, product.name || product.product_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    if (productName) {
+      item.name = productName;
+      item.lookupStatus = "found";
+      item.updatedAt = new Date().toISOString();
+      saveItems();
+      render();
+      setStatus(`Found product name for ${barcode}.`);
+      return;
+    }
+
+    item.lookupStatus = "not-found";
+    saveItems();
+    setStatus(`No product name found for ${barcode}.`);
+  } catch (error) {
+    item.lookupStatus = "failed";
+    saveItems();
+    setStatus("Product lookup failed. You can still name the item manually.");
+    console.error(error);
+  }
 }
 
 function resetCounts() {
@@ -332,6 +390,6 @@ function loadScript(src) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=4").catch(() => {});
+    navigator.serviceWorker.register("./service-worker.js?v=5").catch(() => {});
   });
 }
