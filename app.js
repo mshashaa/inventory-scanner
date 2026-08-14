@@ -1,6 +1,10 @@
 const STORAGE_KEY = "inventory-scanner-items-v1";
 const SCAN_COOLDOWN_MS = 1000;
 const PRODUCT_LOOKUP_URL = "https://upc.dev/v1/product/";
+const SUPABASE_URL = "https://ujiujwuxucqokykzvseb.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqaXVqd3V4dWNxb2t5a3p2c2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY3MzAyNDIsImV4cCI6MjEwMjMwNjI0Mn0.tuzvWbm2iUMQ3UCUr2j1ISi35pBDZjGqnZWW4zAKsyg";
+const INVENTORY_ENDPOINT = `${SUPABASE_URL}/rest/v1/inventory_items`;
+const INCREMENT_ENDPOINT = `${SUPABASE_URL}/rest/v1/rpc/increment_inventory_item`;
 
 const state = {
   items: loadItems(),
@@ -33,6 +37,7 @@ const els = {
 
 render();
 registerServiceWorker();
+refreshSharedInventory();
 
 els.startScan.addEventListener("click", startScanner);
 els.stopScan.addEventListener("click", stopScanner);
@@ -53,7 +58,6 @@ els.manualForm.addEventListener("submit", (event) => {
 
   addScan(barcode);
   confirmScan(barcode);
-  lookupProductIfNeeded(barcode);
   els.barcodeInput.value = "";
   els.barcodeInput.focus();
 });
@@ -97,6 +101,7 @@ function addScan(value) {
   saveItems();
   render();
   setStatus(`Added ${barcode}.`);
+  syncScanToCloud(barcode).finally(() => lookupProductIfNeeded(barcode));
 }
 
 function render() {
@@ -133,6 +138,7 @@ function render() {
       }
       saveItems();
       render();
+      syncProductNameToCloud(item);
     });
 
     plus.addEventListener("click", () => {
@@ -140,6 +146,7 @@ function render() {
       item.updatedAt = new Date().toISOString();
       saveItems();
       render();
+      syncCountToCloud(item);
     });
 
     minus.addEventListener("click", () => {
@@ -147,6 +154,7 @@ function render() {
       item.updatedAt = new Date().toISOString();
       saveItems();
       render();
+      syncCountToCloud(item);
     });
 
     els.itemsList.append(row);
@@ -214,11 +222,153 @@ function onScanSuccess(decodedText) {
   state.lastAcceptedScanAt = now;
   addScan(barcode);
   confirmScan(barcode);
-  lookupProductIfNeeded(barcode);
 }
 
 function setStatus(message) {
   els.scannerStatus.textContent = message;
+}
+
+function cloudHeaders(prefer) {
+  const headers = {
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+
+  if (prefer) {
+    headers.Prefer = prefer;
+  }
+
+  return headers;
+}
+
+function toAppItem(row) {
+  return {
+    barcode: row.barcode,
+    name: row.product_name || "",
+    count: Number(row.count || 0),
+    updatedAt: row.updated_at || "",
+    lookupAttemptedAt: row.lookup_attempted_at || "",
+    lookupStatus: row.lookup_status || "",
+  };
+}
+
+function toCloudPatch(item) {
+  return {
+    product_name: item.name || "",
+    count: item.count,
+    lookup_attempted_at: item.lookupAttemptedAt || null,
+    lookup_status: item.lookupStatus || "",
+    updated_at: item.updatedAt || new Date().toISOString(),
+  };
+}
+
+function replaceLocalItem(nextItem) {
+  const index = state.items.findIndex((item) => item.barcode === nextItem.barcode);
+  if (index >= 0) {
+    state.items[index] = nextItem;
+  } else {
+    state.items.unshift(nextItem);
+  }
+  saveItems();
+  render();
+}
+
+async function refreshSharedInventory() {
+  try {
+    const response = await fetch(`${INVENTORY_ENDPOINT}?select=*&order=updated_at.desc`, {
+      headers: cloudHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Supabase inventory fetch failed: ${response.status}`);
+    }
+
+    const rows = await response.json();
+    state.items = rows.map(toAppItem);
+    saveItems();
+    render();
+    setStatus("Shared inventory synced.");
+  } catch (error) {
+    setStatus("Using local cache. Shared inventory sync failed.");
+    console.error(error);
+  }
+}
+
+async function syncScanToCloud(barcode) {
+  try {
+    const response = await fetch(INCREMENT_ENDPOINT, {
+      method: "POST",
+      headers: cloudHeaders(),
+      body: JSON.stringify({ upc: barcode }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Supabase increment failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+    const row = Array.isArray(result) ? result[0] : result;
+    if (row && row.barcode) {
+      replaceLocalItem(toAppItem(row));
+    }
+    setStatus(`Shared count updated for ${barcode}.`);
+  } catch (error) {
+    setStatus("Scan saved locally. Shared count update failed.");
+    console.error(error);
+  }
+}
+
+async function syncProductNameToCloud(item) {
+  try {
+    const response = await fetch(`${INVENTORY_ENDPOINT}?barcode=eq.${encodeURIComponent(item.barcode)}`, {
+      method: "PATCH",
+      headers: cloudHeaders("return=representation"),
+      body: JSON.stringify({
+        product_name: item.name || "",
+        lookup_attempted_at: item.lookupAttemptedAt || null,
+        lookup_status: item.lookupStatus || "manual",
+        updated_at: new Date().toISOString(),
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Supabase name update failed: ${response.status}`);
+    }
+
+    const rows = await response.json();
+    if (rows[0]) {
+      replaceLocalItem(toAppItem(rows[0]));
+    }
+    setStatus(`Shared product name updated for ${item.barcode}.`);
+  } catch (error) {
+    setStatus("Name saved locally. Shared name update failed.");
+    console.error(error);
+  }
+}
+
+async function syncCountToCloud(item) {
+  try {
+    const response = await fetch(`${INVENTORY_ENDPOINT}?barcode=eq.${encodeURIComponent(item.barcode)}`, {
+      method: "PATCH",
+      headers: cloudHeaders("return=representation"),
+      body: JSON.stringify(toCloudPatch(item)),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Supabase count update failed: ${response.status}`);
+    }
+
+    const rows = await response.json();
+    if (rows[0]) {
+      replaceLocalItem(toAppItem(rows[0]));
+    }
+    setStatus(`Shared count updated for ${item.barcode}.`);
+  } catch (error) {
+    setStatus("Count changed locally. Shared count update failed.");
+    console.error(error);
+  }
 }
 
 async function lookupProductIfNeeded(barcode) {
@@ -238,6 +388,7 @@ async function lookupProductIfNeeded(barcode) {
     if (!response.ok) {
       item.lookupStatus = response.status === 404 ? "not-found" : "failed";
       saveItems();
+      syncLookupToCloud(item);
       setStatus(response.status === 404 ? `No product name found for ${barcode}.` : "Product lookup failed.");
       return;
     }
@@ -255,17 +406,46 @@ async function lookupProductIfNeeded(barcode) {
       item.updatedAt = new Date().toISOString();
       saveItems();
       render();
+      syncProductNameToCloud(item);
       setStatus(`Found product name for ${barcode}.`);
       return;
     }
 
     item.lookupStatus = "not-found";
     saveItems();
+    syncLookupToCloud(item);
     setStatus(`No product name found for ${barcode}.`);
   } catch (error) {
     item.lookupStatus = "failed";
     saveItems();
+    syncLookupToCloud(item);
     setStatus("Product lookup failed. You can still name the item manually.");
+    console.error(error);
+  }
+}
+
+async function syncLookupToCloud(item) {
+  try {
+    const response = await fetch(`${INVENTORY_ENDPOINT}?barcode=eq.${encodeURIComponent(item.barcode)}`, {
+      method: "PATCH",
+      headers: cloudHeaders("return=representation"),
+      body: JSON.stringify({
+        product_name: item.name || "",
+        lookup_attempted_at: item.lookupAttemptedAt || null,
+        lookup_status: item.lookupStatus || "",
+        updated_at: item.updatedAt || new Date().toISOString(),
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Supabase lookup update failed: ${response.status}`);
+    }
+
+    const rows = await response.json();
+    if (rows[0]) {
+      replaceLocalItem(toAppItem(rows[0]));
+    }
+  } catch (error) {
     console.error(error);
   }
 }
@@ -282,7 +462,34 @@ function resetCounts() {
   });
   saveItems();
   render();
+  resetSharedCounts();
   setStatus("Counts reset.");
+}
+
+async function resetSharedCounts() {
+  try {
+    const response = await fetch(`${INVENTORY_ENDPOINT}?barcode=not.is.null`, {
+      method: "PATCH",
+      headers: cloudHeaders("return=representation"),
+      body: JSON.stringify({
+        count: 0,
+        updated_at: new Date().toISOString(),
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Supabase reset failed: ${response.status}`);
+    }
+
+    const rows = await response.json();
+    state.items = rows.map(toAppItem);
+    saveItems();
+    render();
+    setStatus("Shared counts reset.");
+  } catch (error) {
+    setStatus("Counts reset locally. Shared reset failed.");
+    console.error(error);
+  }
 }
 
 function exportExcel() {
@@ -390,6 +597,6 @@ function loadScript(src) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=5").catch(() => {});
+    navigator.serviceWorker.register("./service-worker.js?v=6").catch(() => {});
   });
 }
