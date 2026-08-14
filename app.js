@@ -4,6 +4,7 @@ const state = {
   items: loadItems(),
   scanner: null,
   scanning: false,
+  audioContext: null,
   lastScan: "",
   lastScanAt: 0,
   query: "",
@@ -23,6 +24,8 @@ const els = {
   itemsList: document.querySelector("#itemsList"),
   itemTemplate: document.querySelector("#itemTemplate"),
   searchInput: document.querySelector("#searchInput"),
+  scanToast: document.querySelector("#scanToast"),
+  scanToastDetail: document.querySelector("#scanToastDetail"),
 };
 
 render();
@@ -46,6 +49,7 @@ els.manualForm.addEventListener("submit", (event) => {
   }
 
   addScan(barcode);
+  confirmScan(barcode);
   els.barcodeInput.value = "";
   els.barcodeInput.focus();
 });
@@ -142,6 +146,7 @@ function render() {
 async function startScanner() {
   if (state.scanning) return;
 
+  primeAudio();
   setStatus("Starting camera...");
   els.startScan.disabled = true;
 
@@ -197,6 +202,7 @@ function onScanSuccess(decodedText) {
   state.lastScan = barcode;
   state.lastScanAt = now;
   addScan(barcode);
+  confirmScan(barcode);
 }
 
 function setStatus(message) {
@@ -224,47 +230,73 @@ function exportExcel() {
     ...state.items.map((item) => [item.barcode, item.name, item.count, item.updatedAt || ""]),
   ];
 
-  const sheetRows = rows
-    .map((row) => {
-      const cells = row
-        .map((value) => {
-          const type = typeof value === "number" ? "Number" : "String";
-          return `<Cell><Data ss:Type="${type}">${escapeXml(String(value))}</Data></Cell>`;
-        })
-        .join("");
-      return `<Row>${cells}</Row>`;
-    })
-    .join("");
-
-  const workbook = `<?xml version="1.0"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
- <Worksheet ss:Name="Inventory">
-  <Table>${sheetRows}</Table>
- </Worksheet>
-</Workbook>`;
-
-  const blob = new Blob([workbook], { type: "application/vnd.ms-excel" });
+  const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\r\n");
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `inventory-${new Date().toISOString().slice(0, 10)}.xls`;
+  anchor.download = `inventory-${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.append(anchor);
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
 }
 
-function escapeXml(value) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
+function escapeCsv(value) {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function confirmScan(barcode) {
+  showScanToast(barcode);
+  playScanTone();
+
+  if ("vibrate" in navigator) {
+    navigator.vibrate(35);
+  }
+}
+
+function showScanToast(barcode) {
+  els.scanToastDetail.textContent = barcode;
+  els.scanToast.hidden = false;
+  els.scanToast.classList.remove("is-visible");
+  void els.scanToast.offsetWidth;
+  els.scanToast.classList.add("is-visible");
+}
+
+function primeAudio() {
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) return;
+
+  if (!state.audioContext) {
+    state.audioContext = new AudioContext();
+  }
+
+  if (state.audioContext.state === "suspended") {
+    state.audioContext.resume().catch(() => {});
+  }
+}
+
+function playScanTone() {
+  primeAudio();
+  const context = state.audioContext;
+  if (!context || context.state === "suspended") return;
+
+  const now = context.currentTime;
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(880, now);
+  oscillator.frequency.exponentialRampToValueAtTime(1320, now + 0.08);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.18, now + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start(now);
+  oscillator.stop(now + 0.16);
 }
 
 function loadScannerLibrary() {
