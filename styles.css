@@ -71,6 +71,20 @@ h1 {
   line-height: 0.95;
 }
 
+.version-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 42px;
+  min-height: 28px;
+  margin-left: 6px;
+  border-radius: 8px;
+  background: #eab308;
+  color: #18211f;
+  font-size: 0.78rem;
+  font-weight: 900;
+  vertical-align: middle;
+}
+
 h2 {
   font-size: 1.15rem;
 }
@@ -345,59 +359,67 @@ button:disabled {
   font-weight: 900;
 }
 
-.scan-toast {
+.scan-flash {
   position: fixed;
-  inset: auto 18px calc(26px + env(safe-area-inset-bottom)) 18px;
-  z-index: 20;
+  inset: 0;
+  z-index: 100;
   display: grid;
+  place-content: center;
   gap: 4px;
-  width: min(420px, calc(100% - 36px));
-  margin: 0 auto;
-  padding: 18px 20px;
-  border-radius: 8px;
-  background: #0f766e;
+  padding: 24px;
+  background: rgba(15, 118, 110, 0.94);
   color: #fff;
-  box-shadow: 0 18px 48px rgba(15, 118, 110, 0.36);
   text-align: center;
-  transform: translateY(20px);
   opacity: 0;
   pointer-events: none;
 }
 
-.scan-toast[hidden] {
+.scan-flash[hidden] {
   display: none;
 }
 
-.scan-toast.is-visible {
-  animation: scan-confirm 950ms ease both;
+.scan-flash.is-visible {
+  animation: scan-confirm 760ms ease both;
 }
 
-.scan-toast strong {
-  font-size: 1.18rem;
+.scan-flash strong {
+  font-size: clamp(3rem, 15vw, 8rem);
+  line-height: 0.9;
+  text-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
 }
 
-.scan-toast span {
+.scan-flash span {
   overflow: hidden;
+  max-width: min(88vw, 760px);
+  margin: 12px auto 0;
+  font-size: clamp(1.1rem, 5vw, 2rem);
+  font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
-  opacity: 0.9;
+  opacity: 0.95;
 }
 
 @keyframes scan-confirm {
   0% {
     opacity: 0;
-    transform: translateY(20px) scale(0.98);
+    transform: scale(0.92);
   }
 
-  16%,
-  76% {
+  12%,
+  70% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: scale(1);
+  }
+
+  24%,
+  42% {
+    background: rgba(234, 179, 8, 0.96);
+    color: #18211f;
   }
 
   100% {
     opacity: 0;
-    transform: translateY(8px) scale(0.99);
+    transform: scale(1.03);
   }
 }
 
