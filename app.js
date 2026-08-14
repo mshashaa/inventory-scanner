@@ -24,7 +24,7 @@ const els = {
   itemsList: document.querySelector("#itemsList"),
   itemTemplate: document.querySelector("#itemTemplate"),
   searchInput: document.querySelector("#searchInput"),
-  scanToast: document.querySelector("#scanToast"),
+  scanFlash: document.querySelector("#scanFlash"),
   scanToastDetail: document.querySelector("#scanToastDetail"),
 };
 
@@ -258,10 +258,14 @@ function confirmScan(barcode) {
 
 function showScanToast(barcode) {
   els.scanToastDetail.textContent = barcode;
-  els.scanToast.hidden = false;
-  els.scanToast.classList.remove("is-visible");
-  void els.scanToast.offsetWidth;
-  els.scanToast.classList.add("is-visible");
+  els.scanFlash.hidden = false;
+  els.scanFlash.classList.remove("is-visible");
+  void els.scanFlash.offsetWidth;
+  els.scanFlash.classList.add("is-visible");
+  window.clearTimeout(showScanToast.hideTimer);
+  showScanToast.hideTimer = window.setTimeout(() => {
+    els.scanFlash.hidden = true;
+  }, 820);
 }
 
 function primeAudio() {
@@ -284,19 +288,25 @@ function playScanTone() {
 
   const now = context.currentTime;
   const oscillator = context.createOscillator();
+  const secondOscillator = context.createOscillator();
   const gain = context.createGain();
 
-  oscillator.type = "sine";
-  oscillator.frequency.setValueAtTime(880, now);
-  oscillator.frequency.exponentialRampToValueAtTime(1320, now + 0.08);
+  oscillator.type = "square";
+  secondOscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(1046, now);
+  oscillator.frequency.exponentialRampToValueAtTime(1568, now + 0.09);
+  secondOscillator.frequency.setValueAtTime(2093, now + 0.04);
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.18, now + 0.01);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+  gain.gain.exponentialRampToValueAtTime(0.32, now + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
 
   oscillator.connect(gain);
+  secondOscillator.connect(gain);
   gain.connect(context.destination);
   oscillator.start(now);
-  oscillator.stop(now + 0.16);
+  secondOscillator.start(now + 0.045);
+  oscillator.stop(now + 0.23);
+  secondOscillator.stop(now + 0.2);
 }
 
 function loadScannerLibrary() {
@@ -319,6 +329,6 @@ function loadScript(src) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+    navigator.serviceWorker.register("./service-worker.js?v=3").catch(() => {});
   });
 }
