@@ -4,16 +4,17 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#0f766e">
+    <meta http-equiv="Cache-Control" content="no-store">
     <title>Inventory Scanner</title>
-    <link rel="manifest" href="./manifest.webmanifest">
-    <link rel="stylesheet" href="./styles.css">
+    <link rel="manifest" href="./manifest.webmanifest?v=3">
+    <link rel="stylesheet" href="./styles.css?v=3">
   </head>
   <body>
     <main class="app-shell">
       <header class="topbar">
         <div>
           <p class="eyebrow">Local inventory counter</p>
-          <h1>Inventory Scanner</h1>
+          <h1>Inventory Scanner <span class="version-badge">v3</span></h1>
         </div>
         <button id="exportExcel" class="icon-button" type="button" aria-label="Export CSV for Excel" title="Export CSV for Excel">
           CSV
@@ -69,8 +70,8 @@
       </section>
     </main>
 
-    <div id="scanToast" class="scan-toast" role="status" aria-live="polite" hidden>
-      <strong>Item added</strong>
+    <div id="scanFlash" class="scan-flash" role="status" aria-live="assertive" hidden>
+      <strong>ITEM ADDED</strong>
       <span id="scanToastDetail"></span>
     </div>
 
@@ -89,6 +90,6 @@
       </article>
     </template>
 
-    <script src="./app.js" defer></script>
+    <script src="./app.js?v=3" defer></script>
   </body>
 </html>
