@@ -15,8 +15,8 @@
           <p class="eyebrow">Local inventory counter</p>
           <h1>Inventory Scanner</h1>
         </div>
-        <button id="exportExcel" class="icon-button" type="button" aria-label="Export to Excel" title="Export to Excel">
-          XLS
+        <button id="exportExcel" class="icon-button" type="button" aria-label="Export CSV for Excel" title="Export CSV for Excel">
+          CSV
         </button>
       </header>
 
@@ -68,6 +68,11 @@
         <div id="itemsList" class="items-list"></div>
       </section>
     </main>
+
+    <div id="scanToast" class="scan-toast" role="status" aria-live="polite" hidden>
+      <strong>Item added</strong>
+      <span id="scanToastDetail"></span>
+    </div>
 
     <template id="itemTemplate">
       <article class="item-row">
