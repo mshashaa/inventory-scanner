@@ -182,7 +182,7 @@ function render() {
 
 function getAiStatusText(item) {
   if (item.aiStatus === "analyzing") return "AI is analyzing the product photo...";
-  if (item.aiStatus === "failed") return "AI analysis failed. Try another photo.";
+  if (item.aiStatus === "failed") return item.aiError || "AI analysis failed. Try another photo.";
   if (item.aiAnalyzedAt) return `AI updated ${new Date(item.aiAnalyzedAt).toLocaleString()}`;
   return "";
 }
@@ -433,7 +433,7 @@ async function handleProductPhoto(event) {
     });
 
     if (!response.ok) {
-      throw new Error(`AI analysis failed: ${response.status}`);
+      throw new Error(await getResponseError(response));
     }
 
     const result = await response.json();
@@ -444,10 +444,20 @@ async function handleProductPhoto(event) {
     setStatus(`AI updated product details for ${barcode}.`);
   } catch (error) {
     item.aiStatus = "failed";
+    item.aiError = error instanceof Error ? error.message : "AI analysis failed.";
     saveItems();
     render();
-    setStatus("AI analysis failed. Try a clearer photo of the product label.");
+    setStatus(item.aiError);
     console.error(error);
+  }
+}
+
+async function getResponseError(response) {
+  try {
+    const result = await response.json();
+    return result.error || result.message || `AI analysis failed: ${response.status}`;
+  } catch {
+    return `AI analysis failed: ${response.status}`;
   }
 }
 
@@ -632,6 +642,6 @@ function loadScript(src) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=7").catch(() => {});
+    navigator.serviceWorker.register("./service-worker.js?v=8").catch(() => {});
   });
 }
