@@ -135,10 +135,21 @@ function getSupabaseServiceKey() {
   if (legacyKey) return legacyKey;
 
   const secretKeys = Deno.env.get("SUPABASE_SECRET_KEYS");
-  if (!secretKeys) return "";
+  if (secretKeys) {
+    const parsed = JSON.parse(secretKeys);
+    if (parsed.default) return parsed.default;
+  }
 
-  const parsed = JSON.parse(secretKeys);
-  return parsed.default || "";
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  if (anonKey) return anonKey;
+
+  const publishableKeys = Deno.env.get("SUPABASE_PUBLISHABLE_KEYS");
+  if (publishableKeys) {
+    const parsed = JSON.parse(publishableKeys);
+    if (parsed.default) return parsed.default;
+  }
+
+  return "";
 }
 
 function supabaseHeaders(serviceKey: string, prefer: string) {
