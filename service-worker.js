@@ -1,10 +1,10 @@
-const CACHE_NAME = "inventory-scanner-v6";
+const CACHE_NAME = "inventory-scanner-v7";
 const APP_SHELL = [
   "./",
-  "./index.html?v=6",
-  "./styles.css?v=6",
-  "./app.js?v=6",
-  "./manifest.webmanifest?v=6",
+  "./index.html?v=7",
+  "./styles.css?v=7",
+  "./app.js?v=7",
+  "./manifest.webmanifest?v=7",
   "./icon.svg",
 ];
 
