@@ -6,15 +6,15 @@
     <meta name="theme-color" content="#0f766e">
     <meta http-equiv="Cache-Control" content="no-store">
     <title>Inventory Scanner</title>
-    <link rel="manifest" href="./manifest.webmanifest?v=6">
-    <link rel="stylesheet" href="./styles.css?v=6">
+    <link rel="manifest" href="./manifest.webmanifest?v=7">
+    <link rel="stylesheet" href="./styles.css?v=7">
   </head>
   <body>
     <main class="app-shell">
       <header class="topbar">
         <div>
           <p class="eyebrow">Local inventory counter</p>
-          <h1>Inventory Scanner <span class="version-badge">v6</span></h1>
+          <h1>Inventory Scanner <span class="version-badge">v7</span></h1>
         </div>
         <button id="exportExcel" class="icon-button" type="button" aria-label="Export CSV for Excel" title="Export CSV for Excel">
           CSV
@@ -74,22 +74,33 @@
       <strong>ITEM ADDED</strong>
       <span id="scanToastDetail"></span>
     </div>
+    <input id="photoInput" class="visually-hidden" type="file" accept="image/*" capture="environment">
 
     <template id="itemTemplate">
       <article class="item-row">
         <div class="item-main">
           <input class="item-name" aria-label="Product name" placeholder="Product name">
           <code class="barcode"></code>
+          <div class="ai-details" hidden>
+            <strong class="brand"></strong>
+            <span class="size"></span>
+            <span class="category"></span>
+            <p class="description"></p>
+          </div>
           <small class="updated"></small>
+          <small class="ai-status"></small>
         </div>
-        <div class="counter">
-          <button class="step minus" type="button" aria-label="Decrease quantity">-</button>
-          <output class="quantity"></output>
-          <button class="step plus" type="button" aria-label="Increase quantity">+</button>
+        <div class="item-side">
+          <div class="counter">
+            <button class="step minus" type="button" aria-label="Decrease quantity">-</button>
+            <output class="quantity"></output>
+            <button class="step plus" type="button" aria-label="Increase quantity">+</button>
+          </div>
+          <button class="ai-photo" type="button">Photo AI</button>
         </div>
       </article>
     </template>
 
-    <script src="./app.js?v=6" defer></script>
+    <script src="./app.js?v=7" defer></script>
   </body>
 </html>
