@@ -130,6 +130,15 @@ h2 {
   padding: 0 16px;
 }
 
+.visually-hidden {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
 button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -335,6 +344,47 @@ button:disabled {
   color: var(--muted);
 }
 
+.ai-details {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid #d7e7e4;
+  border-radius: 8px;
+  background: #f3faf8;
+}
+
+.ai-details[hidden] {
+  display: none;
+}
+
+.ai-details strong {
+  font-size: 0.95rem;
+}
+
+.ai-details span,
+.ai-details p,
+.ai-status {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.ai-details p {
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+.ai-status {
+  display: block;
+  margin-top: 5px;
+}
+
+.item-side {
+  display: grid;
+  gap: 8px;
+  justify-items: stretch;
+}
+
 .counter {
   display: grid;
   grid-template-columns: 44px minmax(54px, auto) 44px;
@@ -342,6 +392,19 @@ button:disabled {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+.ai-photo {
+  min-height: 42px;
+  border: 1px solid #cfe1dd;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--brand-dark);
+  font-weight: 850;
+}
+
+.ai-photo:hover {
+  background: #eef8f6;
 }
 
 .step {
@@ -457,6 +520,10 @@ button:disabled {
 
   .item-row {
     grid-template-columns: 1fr;
+  }
+
+  .item-side {
+    width: 100%;
   }
 
   .counter {
