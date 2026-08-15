@@ -4,7 +4,7 @@ const SUPABASE_URL = "https://ujiujwuxucqokykzvseb.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqaXVqd3V4dWNxb2t5a3p2c2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY3MzAyNDIsImV4cCI6MjEwMjMwNjI0Mn0.tuzvWbm2iUMQ3UCUr2j1ISi35pBDZjGqnZWW4zAKsyg";
 const INVENTORY_ENDPOINT = `${SUPABASE_URL}/rest/v1/inventory_items`;
 const INCREMENT_ENDPOINT = `${SUPABASE_URL}/rest/v1/rpc/increment_inventory_item`;
-const AI_ANALYZE_ENDPOINT = `${SUPABASE_URL}/functions/v1/analyze-product-photo`;
+const AI_ANALYZE_ENDPOINT = `${SUPABASE_URL}/functions/v1/bright-function`;
 
 const state = {
   items: loadItems(),
@@ -642,6 +642,6 @@ function loadScript(src) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=8").catch(() => {});
+    navigator.serviceWorker.register("./service-worker.js?v=9").catch(() => {});
   });
 }
