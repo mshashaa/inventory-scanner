@@ -72,7 +72,26 @@ async function analyzeProductPhoto(barcode: string, imageDataUrl: string): Promi
           ],
         },
       ],
-      max_output_tokens: 500,
+      text: {
+        format: {
+          type: "json_schema",
+          name: "product_details",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              product_name: { type: "string" },
+              brand: { type: "string" },
+              size: { type: "string" },
+              category: { type: "string" },
+              description: { type: "string" },
+            },
+            required: ["product_name", "brand", "size", "category", "description"],
+          },
+        },
+      },
+      max_output_tokens: 1000,
     }),
   });
 
@@ -182,7 +201,17 @@ function parseJsonDetails(text: string): ProductDetails {
     .replace(/```$/i, "")
     .trim();
 
-  return JSON.parse(cleaned);
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(cleaned.slice(start, end + 1));
+    }
+
+    throw new Error(`AI returned invalid product details: ${cleaned.slice(0, 180)}`);
+  }
 }
 
 function sanitizeDetails(details: ProductDetails): ProductDetails {
