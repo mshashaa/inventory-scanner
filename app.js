@@ -1,10 +1,10 @@
 const STORAGE_KEY = "inventory-scanner-items-v1";
 const SCAN_COOLDOWN_MS = 1000;
-const PRODUCT_LOOKUP_URL = "https://upc.dev/v1/product/";
 const SUPABASE_URL = "https://ujiujwuxucqokykzvseb.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqaXVqd3V4dWNxb2t5a3p2c2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY3MzAyNDIsImV4cCI6MjEwMjMwNjI0Mn0.tuzvWbm2iUMQ3UCUr2j1ISi35pBDZjGqnZWW4zAKsyg";
 const INVENTORY_ENDPOINT = `${SUPABASE_URL}/rest/v1/inventory_items`;
 const INCREMENT_ENDPOINT = `${SUPABASE_URL}/rest/v1/rpc/increment_inventory_item`;
+const AI_ANALYZE_ENDPOINT = `${SUPABASE_URL}/functions/v1/analyze-product-photo`;
 
 const state = {
   items: loadItems(),
@@ -15,6 +15,7 @@ const state = {
   lastScanAt: 0,
   lastAcceptedScanAt: 0,
   query: "",
+  pendingAiBarcode: "",
 };
 
 const els = {
@@ -33,6 +34,7 @@ const els = {
   searchInput: document.querySelector("#searchInput"),
   scanFlash: document.querySelector("#scanFlash"),
   scanToastDetail: document.querySelector("#scanToastDetail"),
+  photoInput: document.querySelector("#photoInput"),
 };
 
 render();
@@ -43,6 +45,7 @@ els.startScan.addEventListener("click", startScanner);
 els.stopScan.addEventListener("click", stopScanner);
 els.exportExcel.addEventListener("click", exportExcel);
 els.resetCounts.addEventListener("click", resetCounts);
+els.photoInput.addEventListener("change", handleProductPhoto);
 els.searchInput.addEventListener("input", (event) => {
   state.query = event.target.value.trim().toLowerCase();
   render();
@@ -93,21 +96,26 @@ function addScan(value) {
       name: "",
       count: 1,
       updatedAt: new Date().toISOString(),
-      lookupAttemptedAt: "",
-      lookupStatus: "",
+      brand: "",
+      description: "",
+      category: "",
+      size: "",
+      aiAnalyzedAt: "",
+      aiStatus: "",
     });
   }
 
   saveItems();
   render();
   setStatus(`Added ${barcode}.`);
-  syncScanToCloud(barcode).finally(() => lookupProductIfNeeded(barcode));
+  syncScanToCloud(barcode);
 }
 
 function render() {
   const filtered = state.items.filter((item) => {
     if (!state.query) return true;
-    return item.barcode.toLowerCase().includes(state.query) || item.name.toLowerCase().includes(state.query);
+    return [item.barcode, item.name, item.brand, item.description, item.category, item.size]
+      .some((value) => String(value || "").toLowerCase().includes(state.query));
   });
 
   els.uniqueCount.textContent = state.items.length;
@@ -119,23 +127,32 @@ function render() {
     const row = els.itemTemplate.content.firstElementChild.cloneNode(true);
     const nameInput = row.querySelector(".item-name");
     const barcode = row.querySelector(".barcode");
+    const aiDetails = row.querySelector(".ai-details");
+    const brand = row.querySelector(".brand");
+    const size = row.querySelector(".size");
+    const category = row.querySelector(".category");
+    const description = row.querySelector(".description");
     const updated = row.querySelector(".updated");
+    const aiStatus = row.querySelector(".ai-status");
     const quantity = row.querySelector(".quantity");
     const plus = row.querySelector(".plus");
     const minus = row.querySelector(".minus");
+    const analyzePhoto = row.querySelector(".ai-photo");
 
     nameInput.value = item.name;
     barcode.textContent = item.barcode;
     updated.textContent = item.updatedAt ? `Updated ${new Date(item.updatedAt).toLocaleString()}` : "";
+    brand.textContent = item.brand || "";
+    size.textContent = item.size || "";
+    category.textContent = item.category || "";
+    description.textContent = item.description || "";
+    aiDetails.hidden = !item.brand && !item.size && !item.category && !item.description;
+    aiStatus.textContent = getAiStatusText(item);
     quantity.textContent = item.count;
 
     nameInput.addEventListener("change", () => {
       item.name = nameInput.value.trim();
       item.updatedAt = new Date().toISOString();
-      if (item.name) {
-        item.lookupStatus = "manual";
-        item.lookupAttemptedAt = item.lookupAttemptedAt || new Date().toISOString();
-      }
       saveItems();
       render();
       syncProductNameToCloud(item);
@@ -157,8 +174,17 @@ function render() {
       syncCountToCloud(item);
     });
 
+    analyzePhoto.addEventListener("click", () => beginAnalyzePhoto(item.barcode));
+
     els.itemsList.append(row);
   });
+}
+
+function getAiStatusText(item) {
+  if (item.aiStatus === "analyzing") return "AI is analyzing the product photo...";
+  if (item.aiStatus === "failed") return "AI analysis failed. Try another photo.";
+  if (item.aiAnalyzedAt) return `AI updated ${new Date(item.aiAnalyzedAt).toLocaleString()}`;
+  return "";
 }
 
 async function startScanner() {
@@ -249,8 +275,12 @@ function toAppItem(row) {
     name: row.product_name || "",
     count: Number(row.count || 0),
     updatedAt: row.updated_at || "",
-    lookupAttemptedAt: row.lookup_attempted_at || "",
-    lookupStatus: row.lookup_status || "",
+    brand: row.brand || "",
+    description: row.description || "",
+    category: row.category || "",
+    size: row.size || "",
+    aiAnalyzedAt: row.ai_analyzed_at || "",
+    aiStatus: row.ai_status || "",
   };
 }
 
@@ -258,8 +288,6 @@ function toCloudPatch(item) {
   return {
     product_name: item.name || "",
     count: item.count,
-    lookup_attempted_at: item.lookupAttemptedAt || null,
-    lookup_status: item.lookupStatus || "",
     updated_at: item.updatedAt || new Date().toISOString(),
   };
 }
@@ -327,8 +355,6 @@ async function syncProductNameToCloud(item) {
       headers: cloudHeaders("return=representation"),
       body: JSON.stringify({
         product_name: item.name || "",
-        lookup_attempted_at: item.lookupAttemptedAt || null,
-        lookup_status: item.lookupStatus || "manual",
         updated_at: new Date().toISOString(),
       }),
     });
@@ -371,83 +397,82 @@ async function syncCountToCloud(item) {
   }
 }
 
-async function lookupProductIfNeeded(barcode) {
+function beginAnalyzePhoto(barcode) {
   const item = state.items.find((entry) => entry.barcode === barcode);
-  if (!item || item.name || item.lookupAttemptedAt) return;
+  if (!item) return;
 
-  item.lookupAttemptedAt = new Date().toISOString();
-  item.lookupStatus = "looking";
-  saveItems();
-  setStatus(`Looking up ${barcode}...`);
-
-  try {
-    const response = await fetch(`${PRODUCT_LOOKUP_URL}${encodeURIComponent(barcode)}`, {
-      headers: { Accept: "application/json" },
-    });
-
-    if (!response.ok) {
-      item.lookupStatus = response.status === 404 ? "not-found" : "failed";
-      saveItems();
-      syncLookupToCloud(item);
-      setStatus(response.status === 404 ? `No product name found for ${barcode}.` : "Product lookup failed.");
-      return;
-    }
-
-    const result = await response.json();
-    const product = result.data || result.product || {};
-    const productName = [product.brand, product.name || product.product_name]
-      .filter(Boolean)
-      .join(" ")
-      .trim();
-
-    if (productName) {
-      item.name = productName;
-      item.lookupStatus = "found";
-      item.updatedAt = new Date().toISOString();
-      saveItems();
-      render();
-      syncProductNameToCloud(item);
-      setStatus(`Found product name for ${barcode}.`);
-      return;
-    }
-
-    item.lookupStatus = "not-found";
-    saveItems();
-    syncLookupToCloud(item);
-    setStatus(`No product name found for ${barcode}.`);
-  } catch (error) {
-    item.lookupStatus = "failed";
-    saveItems();
-    syncLookupToCloud(item);
-    setStatus("Product lookup failed. You can still name the item manually.");
-    console.error(error);
-  }
+  state.pendingAiBarcode = barcode;
+  els.photoInput.value = "";
+  els.photoInput.click();
 }
 
-async function syncLookupToCloud(item) {
+async function handleProductPhoto(event) {
+  const file = event.target.files && event.target.files[0];
+  const barcode = state.pendingAiBarcode;
+  state.pendingAiBarcode = "";
+
+  if (!file || !barcode) return;
+
+  const item = state.items.find((entry) => entry.barcode === barcode);
+  if (!item) return;
+
+  item.aiStatus = "analyzing";
+  saveItems();
+  render();
+  setStatus(`Analyzing product photo for ${barcode}...`);
+
   try {
-    const response = await fetch(`${INVENTORY_ENDPOINT}?barcode=eq.${encodeURIComponent(item.barcode)}`, {
-      method: "PATCH",
-      headers: cloudHeaders("return=representation"),
+    const imageDataUrl = await resizeImageForAi(file);
+    const response = await fetch(AI_ANALYZE_ENDPOINT, {
+      method: "POST",
+      headers: cloudHeaders(),
       body: JSON.stringify({
-        product_name: item.name || "",
-        lookup_attempted_at: item.lookupAttemptedAt || null,
-        lookup_status: item.lookupStatus || "",
-        updated_at: item.updatedAt || new Date().toISOString(),
+        barcode,
+        imageDataUrl,
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`Supabase lookup update failed: ${response.status}`);
+      throw new Error(`AI analysis failed: ${response.status}`);
     }
 
-    const rows = await response.json();
-    if (rows[0]) {
-      replaceLocalItem(toAppItem(rows[0]));
+    const result = await response.json();
+    const row = result.item || result.row || result;
+    if (row && row.barcode) {
+      replaceLocalItem(toAppItem(row));
     }
+    setStatus(`AI updated product details for ${barcode}.`);
   } catch (error) {
+    item.aiStatus = "failed";
+    saveItems();
+    render();
+    setStatus("AI analysis failed. Try a clearer photo of the product label.");
     console.error(error);
   }
+}
+
+function resizeImageForAi(file) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      image.onload = () => {
+        const maxSide = 1280;
+        const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      image.onerror = reject;
+      image.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 function resetCounts() {
@@ -494,8 +519,18 @@ async function resetSharedCounts() {
 
 function exportExcel() {
   const rows = [
-    ["Barcode", "Product Name", "Count", "Last Updated"],
-    ...state.items.map((item) => [item.barcode, item.name, item.count, item.updatedAt || ""]),
+    ["Barcode", "Product Name", "Brand", "Size", "Category", "Description", "Count", "Last Updated", "AI Updated"],
+    ...state.items.map((item) => [
+      item.barcode,
+      item.name,
+      item.brand || "",
+      item.size || "",
+      item.category || "",
+      item.description || "",
+      item.count,
+      item.updatedAt || "",
+      item.aiAnalyzedAt || "",
+    ]),
   ];
 
   const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\r\n");
@@ -597,6 +632,6 @@ function loadScript(src) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=6").catch(() => {});
+    navigator.serviceWorker.register("./service-worker.js?v=7").catch(() => {});
   });
 }
