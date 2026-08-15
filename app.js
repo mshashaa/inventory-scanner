@@ -24,6 +24,7 @@ const els = {
   scannerStatus: document.querySelector("#scannerStatus"),
   manualForm: document.querySelector("#manualForm"),
   barcodeInput: document.querySelector("#barcodeInput"),
+  addPhotoItem: document.querySelector("#addPhotoItem"),
   exportExcel: document.querySelector("#exportExcel"),
   resetCounts: document.querySelector("#resetCounts"),
   uniqueCount: document.querySelector("#uniqueCount"),
@@ -43,6 +44,7 @@ refreshSharedInventory();
 
 els.startScan.addEventListener("click", startScanner);
 els.stopScan.addEventListener("click", stopScanner);
+els.addPhotoItem.addEventListener("click", addPhotoOnlyItem);
 els.exportExcel.addEventListener("click", exportExcel);
 els.resetCounts.addEventListener("click", resetCounts);
 els.photoInput.addEventListener("change", handleProductPhoto);
@@ -109,6 +111,35 @@ function addScan(value) {
   render();
   setStatus(`Added ${barcode}.`);
   syncScanToCloud(barcode);
+}
+
+function addPhotoOnlyItem() {
+  const barcode = createPhotoItemCode();
+  state.items.unshift({
+    barcode,
+    name: "",
+    count: 1,
+    updatedAt: new Date().toISOString(),
+    brand: "",
+    description: "",
+    category: "",
+    size: "",
+    aiAnalyzedAt: "",
+    aiStatus: "",
+  });
+
+  saveItems();
+  render();
+  confirmScan(barcode);
+  setStatus("Photo-only item added. Take a product photo.");
+  syncScanToCloud(barcode);
+  beginAnalyzePhoto(barcode);
+}
+
+function createPhotoItemCode() {
+  const timestamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `PHOTO-${timestamp}-${suffix}`;
 }
 
 function render() {
@@ -642,6 +673,6 @@ function loadScript(src) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=9").catch(() => {});
+    navigator.serviceWorker.register("./service-worker.js?v=10").catch(() => {});
   });
 }
