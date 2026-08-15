@@ -92,6 +92,7 @@ h2 {
 .icon-button,
 .primary,
 .secondary,
+.photo-add,
 .danger,
 .step {
   min-height: 44px;
@@ -121,6 +122,17 @@ h2 {
   background: #e6eeeb;
   color: var(--ink);
   padding: 0 18px;
+}
+
+.photo-add {
+  border: 1px solid #cfe1dd;
+  background: #ffffff;
+  color: var(--brand-dark);
+  padding: 0 18px;
+}
+
+.photo-add:hover {
+  background: #eef8f6;
 }
 
 .danger {
@@ -504,6 +516,10 @@ button:disabled {
   .inline-controls {
     display: grid;
     grid-template-columns: 1fr 1fr;
+  }
+
+  .photo-add {
+    grid-column: 1 / -1;
   }
 
   .inline-controls input {
