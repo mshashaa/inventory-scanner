@@ -179,7 +179,7 @@ function render() {
     description.textContent = item.description || "";
     aiDetails.hidden = !item.brand && !item.size && !item.category && !item.description;
     aiStatus.textContent = getAiStatusText(item);
-    quantity.textContent = item.count;
+    quantity.value = item.count;
 
     nameInput.addEventListener("change", () => {
       item.name = nameInput.value.trim();
@@ -205,10 +205,36 @@ function render() {
       syncCountToCloud(item);
     });
 
+    quantity.addEventListener("change", () => commitQuantityInput(item, quantity));
+    quantity.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        quantity.blur();
+      }
+    });
+
     analyzePhoto.addEventListener("click", () => beginAnalyzePhoto(item.barcode));
 
     els.itemsList.append(row);
   });
+}
+
+function commitQuantityInput(item, input) {
+  const value = Number(input.value);
+  if (!Number.isFinite(value) || value < 0) {
+    input.value = item.count;
+    return;
+  }
+
+  const nextCount = Math.floor(value);
+  input.value = nextCount;
+  if (nextCount === item.count) return;
+
+  item.count = nextCount;
+  item.updatedAt = new Date().toISOString();
+  saveItems();
+  render();
+  syncCountToCloud(item);
 }
 
 function getAiStatusText(item) {
@@ -673,6 +699,6 @@ function loadScript(src) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=10").catch(() => {});
+    navigator.serviceWorker.register("./service-worker.js?v=11").catch(() => {});
   });
 }
