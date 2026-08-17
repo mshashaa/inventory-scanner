@@ -428,10 +428,24 @@ button:disabled {
 
 .quantity {
   min-width: 54px;
+  min-height: 44px;
+  border: 0;
+  background: #ffffff;
   padding: 0 10px;
   text-align: center;
   font-size: 1.2rem;
   font-weight: 900;
+  color: var(--ink);
+}
+
+.quantity:focus {
+  outline: 3px solid rgba(15, 118, 110, 0.16);
+  outline-offset: -3px;
+}
+
+.quantity::-webkit-outer-spin-button,
+.quantity::-webkit-inner-spin-button {
+  margin: 0;
 }
 
 .scan-flash {
